@@ -1,0 +1,128 @@
+using System.Numerics;
+using System;
+using UnityEngine;
+
+public class GameController : MonoBehaviour
+{
+    public GameObject ballPrefab;
+    public GameObject paddlePrefab;
+    public GameObject blockPrefab;
+    public int rows = 4;
+    public int cols = 6;
+    public float padding = 0.2f;
+    public float initialBallSpeed = 5f;
+    public float paddleSpeed = 5f;
+
+    private GameObject paddle;
+    private GameObject ball;
+
+    void Start()
+    {
+        SpawnPaddle();
+        SpawnBall();
+        SpawnBlocks();
+    }
+
+    void SpawnPaddle()
+    {
+        paddle = Instantiate(paddlePrefab, Vector3.zero, Quaternion.identity);
+    }
+
+    void SpawnBall()
+    {
+        ball = Instantiate(ballPrefab, Vector3.zero, Quaternion.identity);
+        ball.GetComponent<BallController>().InitializeBall(initialBallSpeed);
+    }
+
+    void SpawnBlocks()
+    {
+        float blockWidth = blockPrefab.GetComponent<SpriteRenderer>().bounds.size.x;
+        float blockHeight = blockPrefab.GetComponent<SpriteRenderer>().bounds.size.y;
+
+        float screenWidth = Camera.main.orthographicSize * 2 * Camera.main.aspect;
+        float screenHeight = Camera.main.orthographicSize * 2;
+
+        float totalWidth = cols * (blockWidth + padding) - padding;
+        float totalHeight = rows * (blockHeight + padding) - padding;
+
+        float startX = -totalWidth / 2 + blockWidth / 2;
+        float startY = screenHeight / 2 - blockHeight / 2;
+
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                Vector3 blockPosition = new Vector3(startX + col * (blockWidth + padding),
+                                                    startY - row * (blockHeight + padding),
+                                                    0f);
+                Instantiate(blockPrefab, blockPosition, Quaternion.identity);
+            }
+        }
+    }
+
+    void Update()
+    {
+        MovePaddle();
+        CheckBallOutOfBounds();
+    }
+
+    void MovePaddle()
+    {
+        float horizontalInput = Input.GetAxis("Horizontal");
+        Vector3 movement = new Vector3(horizontalInput, 0f, 0f) * paddleSpeed * Time.deltaTime;
+        paddle.transform.position += movement;
+
+        float screenWidth = Camera.main.orthographicSize * 2 * Camera.main.aspect;
+        float paddleHalfWidth = paddle.GetComponent<SpriteRenderer>().bounds.size.x / 2;
+        float paddleX = Mathf.Clamp(paddle.transform.position.x, -screenWidth / 2 + paddleHalfWidth, screenWidth / 2 - paddleHalfWidth);
+        paddle.transform.position = new Vector3(paddleX, paddle.transform.position.y, paddle.transform.position.z);
+    }
+
+    void CheckBallOutOfBounds()
+    {
+        if (ball.transform.position.y < -Camera.main.orthographicSize)
+        {
+            ResetBall();
+        }
+    }
+
+    void ResetBall()
+    {
+        ball.transform.position = Vector3.zero;
+        ball.GetComponent<Rigidbody2D>().velocity = Vector2.zero;
+        ball.GetComponent<BallController>().InitializeBall(initialBallSpeed);
+    }
+}
+
+public class BallController : MonoBehaviour
+{
+    private Rigidbody2D rb;
+
+    void Start()
+    {
+        rb = GetComponent<Rigidbody2D>();
+    }
+
+    public void InitializeBall(float speed)
+    {
+        float randDirectionX = Random.Range(-1f, 1f);
+        rb.velocity = new Vector2(randDirectionX, 1).normalized * speed;
+    }
+
+    void OnCollisionEnter2D(Collision2D col)
+    {
+        if (col.gameObject.CompareTag("Paddle"))
+        {
+            Vector2 hitPoint = col.contacts[0].point;
+            float paddleCenterX = col.gameObject.transform.position.x;
+            float offset = hitPoint.x - paddleCenterX;
+
+            Vector2 direction = new Vector2(offset, 1).normalized;
+            rb.velocity = direction * rb.velocity.magnitude;
+        }
+        else if (col.gameObject.CompareTag("Block"))
+        {
+            Destroy(col.gameObject);
+        }
+    }
+}
